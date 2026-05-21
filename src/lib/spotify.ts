@@ -1,7 +1,10 @@
 import type { SpotifyProfile } from '../types'
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string
-const REDIRECT_URI = (import.meta.env.VITE_REDIRECT_URI as string | undefined) ?? 'https://tune-match-gold.vercel.app/callback'
+const REDIRECT_URI = (import.meta.env.VITE_REDIRECT_URI as string | undefined) ??
+  (import.meta.env.PROD
+    ? 'https://tune-match-gold.vercel.app/callback'
+    : 'http://127.0.0.1:5173/callback')
 const SCOPES = 'user-top-read'
 
 interface SpotifyArtist {
