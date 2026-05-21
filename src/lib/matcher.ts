@@ -17,7 +17,7 @@ const FORMAT_CLUSTERS: Array<{ keywords: string[]; formats: string[] }> = [
   },
   {
     keywords: ['pop', 'dance pop', 'electropop', 'synth pop', 'k-pop', 'teen pop', 'bubblegum', 'pop rock'],
-    formats: ['top-40', 'top 40', 'chr', 'hot ac', 'adult contemporary', 'pop'],
+    formats: ['top-40', 'top 40', 'top40', 'chr', 'hot ac', 'adult contemporary', 'pop'],
   },
   {
     keywords: ['adult contemporary', 'soft rock', 'easy listening', 'mellow gold'],
@@ -147,16 +147,18 @@ function calculateFormatScore(stationFormat: string, genreCounts: Record<string,
   const total = Object.values(genreCounts).reduce((a, b) => a + b, 0)
   if (total === 0) return 0
 
-  let weightedMatch = 0
+  let matchedWeight = 0
   for (const [genre, count] of Object.entries(genreCounts)) {
     const weight = count / total
     const targetFormats = getFormatsForGenre(genre)
     if (targetFormats.length > 0 && formatMatches(stationFormat, targetFormats)) {
-      weightedMatch += weight
+      matchedWeight += weight
     }
   }
 
-  return Math.round(weightedMatch * 100)
+  if (matchedWeight === 0) return 0
+  // sqrt scaling: 25% genre match → 50 score, 50% → 71, 100% → 100
+  return Math.round(Math.sqrt(matchedWeight) * 100)
 }
 
 function calculateAudioScore(
@@ -170,49 +172,56 @@ function calculateAudioScore(
 
   let score = 0
 
-  // High energy + high danceability → Top-40, Hip-Hop, Dance
-  if (avgEnergy > 0.7 && avgDanceability > 0.65) {
-    if (hits('top-40', 'top 40', 'chr', 'hip-hop', 'hip hop', 'dance', 'urban', 'rhythmic')) {
+  // High energy + danceability → Top-40, Hip-Hop, Dance, Pop
+  if (avgEnergy >= 0.65 && avgDanceability >= 0.6) {
+    if (hits('top-40', 'top 40', 'top40', 'chr', 'hip-hop', 'hip hop', 'dance', 'urban', 'rhythmic', 'pop', 'hits')) {
       score += 35
     }
   }
 
-  // High valence (happy) → Adult Contemporary, Hot AC, Top-40
-  if (avgValence > 0.65) {
-    if (hits('adult contemporary', 'hot ac', 'top-40', 'top 40', 'soft ac', 'lite', 'pop')) {
-      score += 25
+  // Moderate-high energy → Rock, Pop, Alternative, Classic Hits
+  if (avgEnergy > 0.5) {
+    if (hits('rock', 'pop', 'alternative', 'active rock', 'classic rock', 'top-40', 'top 40', 'top40', 'hits', 'classic hits', '80s', '90s', '00s')) {
+      score += 20
     }
   }
 
-  // Low energy + chill → Folk, Classical, Jazz, Smooth Jazz
-  if (avgEnergy < 0.4) {
-    if (hits('folk', 'classical', 'jazz', 'smooth jazz', 'americana', 'adult standards', 'new age')) {
+  // Positive mood → AC, Hot AC, Pop, Hits
+  if (avgValence > 0.55) {
+    if (hits('adult contemporary', 'hot ac', 'top-40', 'top 40', 'top40', 'soft ac', 'lite', 'pop', 'hits', 'adult hits')) {
+      score += 20
+    }
+  }
+
+  // Low energy → Folk, Classical, Jazz, Chill
+  if (avgEnergy < 0.45) {
+    if (hits('folk', 'classical', 'jazz', 'smooth jazz', 'americana', 'adult standards', 'new age', 'soft ac', 'lite')) {
       score += 35
     }
   }
 
-  // High tempo → Dance, Hip-Hop, CHR
-  if (avgTempo > 130) {
-    if (hits('dance', 'hip-hop', 'hip hop', 'chr', 'top-40', 'top 40', 'rhythmic')) {
-      score += 25
+  // Fast tempo → Dance, Hip-Hop, CHR
+  if (avgTempo > 125) {
+    if (hits('dance', 'hip-hop', 'hip hop', 'chr', 'top-40', 'top 40', 'top40', 'rhythmic')) {
+      score += 20
     }
   }
 
-  // Low valence (dark/moody) → Alternative, Rock
-  if (avgValence < 0.35) {
-    if (hits('alternative', 'rock', 'classic rock', 'active rock', 'grunge', 'metal', 'punk')) {
+  // Dark / moody → Alternative, Rock, Metal
+  if (avgValence < 0.4) {
+    if (hits('alternative', 'rock', 'classic rock', 'active rock', 'grunge', 'metal', 'punk', '90s')) {
       score += 30
     }
   }
 
-  // Mid-range energy, mid-tempo → Rock, Pop, Country, AC, era stations
+  // Mid-range profile → common radio formats
   if (avgEnergy >= 0.4 && avgEnergy <= 0.75 && avgTempo >= 85 && avgTempo <= 135) {
     if (hits(
       'classic rock', 'country', 'adult contemporary', 'americana', 'adult album alternative',
       'rock', 'pop', 'alternative', 'classic hits', '70s', '80s', '90s', '00s',
       'indie', 'hits', 'adult hits',
     )) {
-      score += 15
+      score += 20
     }
   }
 
