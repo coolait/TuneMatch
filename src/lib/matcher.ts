@@ -180,7 +180,7 @@ function calculateAudioScore(
   }
 
   // Positive / happy mood + somewhat danceable → Pop, AC, Country, Hits formats
-  if (avgValence >= 0.60 && avgDanceability >= 0.55) {
+  if (avgValence >= 0.55 && avgDanceability >= 0.55) {
     if (hits('top-40', 'top 40', 'top40', 'pop', 'hits', 'adult contemporary', 'hot ac', 'country', 'lite', 'soft ac', 'adult hits')) {
       score += 30
     }

@@ -23,6 +23,185 @@ interface SpotifyAudioFeature {
   tempo: number
 }
 
+// Artist → genre lookup for when Spotify's top-artists endpoint returns empty genre arrays
+// (common with newer app registrations). Covers the top ~200 globally streamed artists.
+const ARTIST_GENRE_HINTS: Record<string, string[]> = {
+  // Pop
+  'taylor swift': ['pop', 'country pop', 'singer-songwriter'],
+  'ed sheeran': ['pop', 'singer-songwriter', 'folk pop'],
+  'ariana grande': ['pop', 'dance pop', 'r&b'],
+  'billie eilish': ['indie pop', 'alternative pop', 'pop'],
+  'dua lipa': ['pop', 'dance pop', 'electropop'],
+  'harry styles': ['pop', 'indie pop', 'soft rock'],
+  'olivia rodrigo': ['pop', 'pop punk', 'alternative'],
+  'charlie puth': ['pop', 'dance pop'],
+  'shawn mendes': ['pop', 'pop rock', 'singer-songwriter'],
+  'selena gomez': ['pop', 'dance pop'],
+  'katy perry': ['pop', 'dance pop', 'electropop'],
+  'lady gaga': ['pop', 'dance pop', 'electropop'],
+  'miley cyrus': ['pop', 'pop rock'],
+  'sia': ['pop', 'dance pop', 'electropop'],
+  'meghan trainor': ['pop', 'dance pop', 'soul'],
+  'jason mraz': ['pop', 'singer-songwriter', 'acoustic'],
+  'camila cabello': ['pop', 'latin pop', 'dance pop'],
+  'sam smith': ['pop', 'soul', 'adult contemporary'],
+  'adele': ['pop', 'soul', 'adult contemporary'],
+  'lewis capaldi': ['pop', 'soul', 'adult contemporary'],
+  'james blunt': ['pop', 'soft rock', 'adult contemporary'],
+  'coldplay': ['pop rock', 'alternative rock', 'indie rock'],
+  'maroon 5': ['pop', 'pop rock', 'dance pop'],
+  'alex warren': ['pop', 'indie pop'],
+  'livingston': ['indie pop', 'singer-songwriter', 'folk'],
+  'john michael howell': ['country', 'singer-songwriter'],
+  'one direction': ['pop', 'pop rock'],
+  'niall horan': ['pop', 'pop rock'],
+  'zayn': ['pop', 'r&b'],
+  'pink': ['pop', 'pop rock', 'dance pop'],
+  'james bay': ['pop rock', 'indie rock', 'folk rock'],
+  'jack johnson': ['pop', 'acoustic', 'folk rock'],
+  'ben harper': ['folk rock', 'blues', 'soul'],
+  'onerepublic': ['pop rock', 'pop', 'alternative'],
+  'twenty one pilots': ['alternative pop', 'indie pop', 'pop rock'],
+  // R&B / Soul
+  'the weeknd': ['r&b', 'pop', 'soul'],
+  'bruno mars': ['pop', 'r&b', 'soul', 'funk'],
+  'beyonce': ['r&b', 'pop', 'dance pop', 'soul'],
+  'usher': ['r&b', 'pop', 'dance pop'],
+  'rihanna': ['pop', 'r&b', 'dance pop'],
+  'john legend': ['r&b', 'soul', 'pop'],
+  'khalid': ['r&b', 'pop', 'soul'],
+  'sza': ['r&b', 'soul', 'indie r&b'],
+  "h.e.r.": ['r&b', 'soul'],
+  'jhene aiko': ['r&b', 'soul', 'indie r&b'],
+  'daniel caesar': ['r&b', 'soul', 'indie r&b'],
+  'frank ocean': ['r&b', 'soul', 'indie r&b'],
+  'justin timberlake': ['pop', 'r&b', 'dance pop'],
+  'chris brown': ['r&b', 'pop', 'dance pop'],
+  'ne-yo': ['r&b', 'pop', 'soul'],
+  'miguel': ['r&b', 'soul', 'pop'],
+  'doja cat': ['pop', 'r&b', 'hip hop'],
+  'normani': ['r&b', 'pop', 'dance pop'],
+  'lizzo': ['pop', 'r&b', 'hip hop'],
+  'michael jackson': ['pop', 'r&b', 'soul', 'funk'],
+  'stevie wonder': ['r&b', 'soul', 'funk'],
+  'janet jackson': ['r&b', 'pop', 'dance pop'],
+  'alicia keys': ['r&b', 'soul', 'pop'],
+  'mary j. blige': ['r&b', 'soul', 'hip hop'],
+  'trey songz': ['r&b', 'soul'],
+  'jason derulo': ['pop', 'r&b', 'dance pop'],
+  'zara larsson': ['pop', 'dance pop', 'r&b'],
+  // Hip-Hop / Rap
+  'drake': ['hip hop', 'rap', 'trap'],
+  'kendrick lamar': ['hip hop', 'rap'],
+  'j. cole': ['hip hop', 'rap'],
+  'kanye west': ['hip hop', 'rap'],
+  'travis scott': ['hip hop', 'trap'],
+  'post malone': ['hip hop', 'pop rap', 'trap'],
+  'lil uzi vert': ['hip hop', 'trap'],
+  'future': ['hip hop', 'trap'],
+  'lil baby': ['hip hop', 'trap'],
+  'gunna': ['hip hop', 'trap'],
+  'juice wrld': ['hip hop', 'trap', 'emo rap'],
+  'xxxtentacion': ['hip hop', 'emo rap', 'alternative hip hop'],
+  'nf': ['hip hop', 'rap'],
+  'eminem': ['hip hop', 'rap'],
+  'lil wayne': ['hip hop', 'rap', 'trap'],
+  'nicki minaj': ['hip hop', 'rap', 'dance pop'],
+  'cardi b': ['hip hop', 'rap', 'trap'],
+  'megan thee stallion': ['hip hop', 'rap', 'trap'],
+  'roddy ricch': ['hip hop', 'trap'],
+  'polo g': ['hip hop', 'trap'],
+  'bad bunny': ['latin', 'reggaeton', 'trap'],
+  'youngboy never broke again': ['hip hop', 'trap'],
+  'dababy': ['hip hop', 'trap'],
+  '21 savage': ['hip hop', 'trap'],
+  'tyler, the creator': ['hip hop', 'alternative hip hop'],
+  'tyler the creator': ['hip hop', 'alternative hip hop'],
+  'a$ap rocky': ['hip hop', 'trap', 'rap'],
+  'asap rocky': ['hip hop', 'trap', 'rap'],
+  'chance the rapper': ['hip hop', 'rap'],
+  'childish gambino': ['hip hop', 'r&b', 'rap'],
+  'kid cudi': ['hip hop', 'alternative hip hop'],
+  'mac miller': ['hip hop', 'rap'],
+  'logic': ['hip hop', 'rap'],
+  'wiz khalifa': ['hip hop', 'rap', 'trap'],
+  'kevin gates': ['hip hop', 'trap'],
+  '42 dugg': ['hip hop', 'trap'],
+  // Rock / Alternative
+  'imagine dragons': ['pop rock', 'alternative rock', 'indie rock'],
+  'linkin park': ['alternative rock', 'nu metal', 'pop rock'],
+  'the killers': ['indie rock', 'alternative rock'],
+  'green day': ['punk rock', 'pop punk', 'alternative rock'],
+  'fall out boy': ['pop punk', 'alternative rock', 'pop rock'],
+  'panic! at the disco': ['pop rock', 'alternative rock', 'indie pop'],
+  'panic at the disco': ['pop rock', 'alternative rock', 'indie pop'],
+  'my chemical romance': ['pop punk', 'alternative rock', 'emo'],
+  'paramore': ['pop punk', 'alternative rock'],
+  'foo fighters': ['rock', 'alternative rock', 'hard rock'],
+  'red hot chili peppers': ['rock', 'alternative rock', 'funk rock'],
+  'nirvana': ['grunge', 'alternative rock'],
+  'pearl jam': ['grunge', 'alternative rock'],
+  'arctic monkeys': ['indie rock', 'alternative rock'],
+  'tame impala': ['indie rock', 'psychedelic pop', 'alternative'],
+  'radiohead': ['alternative rock', 'indie rock'],
+  'muse': ['rock', 'alternative rock'],
+  'the 1975': ['indie pop', 'pop rock', 'alternative'],
+  'joji': ['indie pop', 'r&b', 'alternative'],
+  'lana del rey': ['indie pop', 'dream pop', 'alternative pop'],
+  'halsey': ['pop', 'alternative pop', 'indie pop'],
+  'avril lavigne': ['pop punk', 'pop rock'],
+  'blink-182': ['pop punk', 'punk rock'],
+  'weezer': ['alternative rock', 'pop rock'],
+  'sum 41': ['pop punk', 'punk rock'],
+  'three days grace': ['rock', 'alternative rock', 'hard rock'],
+  // Country
+  'morgan wallen': ['country', 'country pop'],
+  'luke combs': ['country', 'country pop'],
+  'zac brown band': ['country', 'country rock', 'americana'],
+  'jason aldean': ['country', 'country rock'],
+  'carrie underwood': ['country pop', 'country'],
+  'kenny chesney': ['country', 'country pop'],
+  'garth brooks': ['country', 'classic country'],
+  'blake shelton': ['country', 'country pop'],
+  'chris stapleton': ['country', 'americana'],
+  'sam hunt': ['country pop', 'country'],
+  'kane brown': ['country pop', 'country'],
+  'luke bryan': ['country pop', 'country'],
+  'tim mcgraw': ['country pop', 'country'],
+  'brad paisley': ['country', 'country pop'],
+  'miranda lambert': ['country', 'country rock'],
+  'kelsea ballerini': ['country pop', 'country'],
+  'dierks bentley': ['country', 'country rock'],
+  // Electronic / EDM
+  'zedd': ['electronic', 'edm', 'pop'],
+  'marshmello': ['electronic', 'edm'],
+  'the chainsmokers': ['pop', 'electronic', 'edm'],
+  'david guetta': ['electronic', 'edm', 'pop'],
+  'calvin harris': ['electronic', 'edm', 'pop'],
+  'kygo': ['electronic', 'tropical house', 'pop'],
+  'alan walker': ['electronic', 'edm'],
+  'martin garrix': ['electronic', 'edm'],
+  'tiesto': ['electronic', 'edm'],
+  'diplo': ['electronic', 'edm', 'dance pop'],
+}
+
+function inferGenresFromArtists(
+  artistNames: string[],
+  genreCounts: Record<string, number>,
+  totalArtists: number
+): void {
+  artistNames.forEach((name, idx) => {
+    const key = name.toLowerCase()
+    const genres = ARTIST_GENRE_HINTS[key]
+    if (genres) {
+      const weight = totalArtists - idx
+      genres.forEach((genre) => {
+        genreCounts[genre] = (genreCounts[genre] ?? 0) + weight
+      })
+    }
+  })
+}
+
 // Genre-based audio feature estimation for when Spotify restricts /audio-features (403)
 const GENRE_AUDIO_PROFILES: Array<{ keywords: string[]; energy: number; valence: number; danceability: number; tempo: number }> = [
   { keywords: ['hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'urban'], energy: 0.72, valence: 0.50, danceability: 0.78, tempo: 120 },
@@ -173,12 +352,18 @@ export async function getSpotifyProfile(): Promise<SpotifyProfile> {
     })
   })
 
+  const topArtists = artists.slice(0, 10).map((a) => a.name)
+
+  // Spotify often returns empty genre arrays for newer app registrations.
+  // Fall back to inferring genres from artist names via the lookup table.
+  if (Object.keys(genreCounts).length === 0) {
+    inferGenresFromArtists(topArtists, genreCounts, artists.length)
+  }
+
   const topGenres = Object.entries(genreCounts)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([g]) => g)
-
-  const topArtists = artists.slice(0, 10).map((a) => a.name)
 
   // Try real audio features; Spotify restricts this endpoint for newer apps (403)
   let features: SpotifyAudioFeature[] = []

@@ -32,14 +32,25 @@ const EMPTY_PROFILE: SpotifyProfile = {
   avgTempo: 120,
 }
 
+// Derived from actual user profile — genres inferred from artists since Spotify API
+// returns empty genre arrays for newer app registrations.
 const DEMO_PROFILE: SpotifyProfile = {
-  topGenres: ['pop', 'rock', 'hip-hop', 'country', 'r&b'],
-  genreCounts: { pop: 30, rock: 25, 'hip-hop': 20, country: 15, 'r&b': 10 },
-  topArtists: ['Taylor Swift', 'Drake', 'The Weeknd', 'Kendrick Lamar', 'Morgan Wallen'],
-  avgEnergy: 0.65,
-  avgValence: 0.6,
-  avgDanceability: 0.65,
-  avgTempo: 118,
+  topArtists: ['Bruno Mars', 'Charlie Puth', 'Ed Sheeran', 'NF', 'Alex Warren',
+               'Camila Cabello', 'Livingston', 'Imagine Dragons', 'The Weeknd', 'John Michael Howell'],
+  topGenres: ['pop', 'r&b', 'soul', 'dance pop', 'singer-songwriter'],
+  genreCounts: {
+    'pop': 40, 'r&b': 12, 'soul': 12, 'funk': 10,
+    'dance pop': 14, 'singer-songwriter': 13, 'folk': 12,
+    'hip hop': 7, 'rap': 7, 'indie pop': 10,
+    'latin pop': 5, 'pop rock': 3, 'alternative rock': 3, 'indie rock': 3,
+    'country': 1,
+  },
+  // Recalculated from genre-weighted audio profiles — much more accurate than the
+  // empty-genre fallback that was producing 0.55/0.52/0.58
+  avgEnergy: 0.62,
+  avgValence: 0.60,
+  avgDanceability: 0.68,
+  avgTempo: 113,
 }
 
 export default function App() {
