@@ -166,7 +166,7 @@ function calculateAudioScore(
   profile: Pick<SpotifyProfile, 'avgEnergy' | 'avgValence' | 'avgDanceability' | 'avgTempo'>
 ): number {
   const f = stationFormat.toLowerCase()
-  const { avgEnergy, avgValence, avgDanceability, avgTempo } = profile
+  const { avgEnergy, avgValence, avgDanceability } = profile
   const hits = (...formats: string[]) => formats.some((fmt) => f.includes(fmt))
 
   let score = 0
