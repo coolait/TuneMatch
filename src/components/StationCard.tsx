@@ -14,9 +14,9 @@ function scoreTier(score: number): 'green' | 'yellow' | 'red' {
 }
 
 const tierStyles = {
-  green:  { border: 'bg-green-500',  badge: 'bg-green-100 text-green-700',   text: 'text-green-700' },
-  yellow: { border: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700',  text: 'text-yellow-700' },
-  red:    { border: 'bg-red-400',    badge: 'bg-red-100 text-red-600',         text: 'text-red-600' },
+  green:  { border: 'bg-green-500',  badge: 'bg-green-100 text-green-700',  text: 'text-green-700' },
+  yellow: { border: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700', text: 'text-yellow-700' },
+  red:    { border: 'bg-red-400',    badge: 'bg-red-100 text-red-600',        text: 'text-red-600' },
 }
 
 export default function StationCard({ station, rank, vibesLoading, couldHaveVibe }: Props) {
@@ -25,28 +25,54 @@ export default function StationCard({ station, rank, vibesLoading, couldHaveVibe
   const isTopPick = rank === 1
   const showShimmer = vibesLoading && couldHaveVibe && !station.vibeText
 
+  // Full station name takes priority; fall back to callSign
+  const displayName = station.slogan ?? station.callSign
+  // Only show the extracted call sign as a chip if it's meaningfully different from the full name
+  const showCallChip =
+    station.callSign &&
+    station.slogan &&
+    !station.slogan.toLowerCase().startsWith(station.callSign.toLowerCase())
+
+  const freqLabel = [station.frequency, station.band].filter(Boolean).join(' ')
+
   return (
     <div className="relative bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex hover:shadow-md transition-shadow">
-      {/* Colored left border */}
       <div className={`w-1 flex-shrink-0 ${styles.border}`} />
 
       <div className="flex-1 p-4">
         <div className="flex items-start justify-between gap-3">
-          {/* Station info */}
           <div className="flex-1 min-w-0">
+            {/* Station name row */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-gray-900 text-base">{station.callSign}</span>
-              <span className="text-sm text-gray-500">{station.frequency} {station.band}</span>
+              <span className="font-bold text-gray-900 text-sm leading-snug">{displayName}</span>
               {isTopPick && (
-                <span className="text-xs font-semibold bg-spotify text-white px-2 py-0.5 rounded-full">
+                <span className="text-xs font-semibold bg-spotify text-white px-2 py-0.5 rounded-full shrink-0">
                   Top Pick
                 </span>
               )}
             </div>
 
-            <p className="text-sm text-gray-600 mt-0.5">
-              {station.format} · {station.city}, {station.state}
-            </p>
+            {/* Meta row */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-xs text-gray-500">
+              {showCallChip && (
+                <span className="font-mono font-semibold text-gray-700">{station.callSign}</span>
+              )}
+              {freqLabel && (
+                <>
+                  {showCallChip && <span>·</span>}
+                  <span>{freqLabel}</span>
+                </>
+              )}
+              {station.format !== 'Unknown' && (
+                <>
+                  <span>·</span>
+                  <span className="capitalize">{station.format}</span>
+                </>
+              )}
+            </div>
+
+            {/* Location */}
+            <p className="text-xs text-gray-400 mt-0.5">{station.state}</p>
 
             {/* Vibe text / shimmer */}
             <div className="mt-2 min-h-[1rem]">
@@ -73,7 +99,9 @@ export default function StationCard({ station, rank, vibesLoading, couldHaveVibe
         <div className="flex gap-4 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400">
           <span>Format <span className="text-gray-600 font-medium">{station.formatScore}</span></span>
           <span>Audio <span className="text-gray-600 font-medium">{station.audioScore}</span></span>
-          {station.distance > 0 && <span>{station.distance.toFixed(1)} mi</span>}
+          {station.distance > 0 && station.distance < 999 && (
+            <span>{station.distance.toFixed(0)} mi</span>
+          )}
         </div>
       </div>
     </div>

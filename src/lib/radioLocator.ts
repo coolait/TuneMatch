@@ -1,108 +1,112 @@
 import type { RawStation } from '../types'
 
-interface RawJsonStation {
-  Call?: string
-  callSign?: string
-  Freq?: string
-  frequency?: string
-  Band?: string
-  band?: string
-  Format?: string
-  format?: string
-  City?: string
-  city?: string
-  State?: string
-  state?: string
-  Dist?: string
-  distance?: string | number
-  Slogan?: string
-  slogan?: string
+const NOMINATIM = 'https://nominatim.openstreetmap.org'
+const RADIO_BROWSER = 'https://de1.api.radio-browser.info'
+
+interface NominatimResult {
+  lat: string
+  lon: string
+  address: { state?: string }
 }
 
-function parseJsonStations(data: RawJsonStation[]): RawStation[] {
-  return data
-    .map((item) => ({
-      callSign: (item.Call ?? item.callSign ?? '').trim(),
-      frequency: (item.Freq ?? item.frequency ?? '').trim(),
-      band: ((item.Band ?? item.band ?? 'FM') as string).trim(),
-      format: (item.Format ?? item.format ?? 'Unknown').trim(),
-      city: (item.City ?? item.city ?? '').trim(),
-      state: (item.State ?? item.state ?? '').trim(),
-      distance: parseFloat(String(item.Dist ?? item.distance ?? '0')) || 0,
-      slogan: item.Slogan ?? item.slogan,
-    }))
-    .filter((s) => s.callSign.length > 0 && s.format !== 'Unknown')
+interface RadioBrowserStation {
+  stationuuid: string
+  name: string
+  tags: string
+  state: string
+  countrycode: string
+  votes: number
+  lastcheckok: number
+  geo_lat: number | null
+  geo_long: number | null
 }
 
-function parseTextStations(text: string): RawStation[] {
-  const lines = text
-    .trim()
-    .split('\n')
-    .map((l) => l.trim())
+function extractCallSign(name: string): string {
+  const match = name.match(/\b([KW][A-Z]{2,3})\b/i)
+  return match ? match[1].toUpperCase() : name.split(/[\s–-]/)[0].slice(0, 12)
+}
+
+function extractFreqBand(name: string): { frequency: string; band: 'AM' | 'FM' } {
+  const fm = name.match(/(\d{2,3}\.\d)\s*FM/i)
+  if (fm) return { frequency: fm[1], band: 'FM' }
+  const am = name.match(/(\d{3,4})\s*AM/i)
+  if (am) return { frequency: am[1], band: 'AM' }
+  const bare = name.match(/\b(\d{2,3}\.\d)\b/)
+  if (bare) return { frequency: bare[1], band: 'FM' }
+  return { frequency: '', band: 'FM' }
+}
+
+function tagsToFormat(tags: string): string {
+  if (!tags.trim()) return 'Unknown'
+  return tags
+    .split(',')
+    .map((t) => t.trim())
     .filter(Boolean)
+    .slice(0, 4)
+    .join(' / ')
+}
 
-  return lines
-    .map((line) => {
-      // Try tab-separated, then pipe-separated, then comma
-      const sep = line.includes('\t') ? '\t' : line.includes('|') ? '|' : ','
-      const parts = line.split(sep).map((p) => p.trim())
-      return {
-        callSign: parts[0] ?? '',
-        frequency: parts[1] ?? '',
-        band: parts[2] ?? 'FM',
-        format: parts[3] ?? 'Unknown',
-        city: parts[4] ?? '',
-        state: parts[5] ?? '',
-        distance: parseFloat(parts[6] ?? '0') || 0,
-        slogan: parts[7],
-      }
-    })
-    .filter((s) => s.callSign.length > 1 && !/^(Call|CALL|Station)$/i.test(s.callSign))
+function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+async function geocodeZip(zip: string): Promise<{ lat: number; lon: number; state: string }> {
+  const url = `${NOMINATIM}/search?postalcode=${zip}&country=US&format=json&limit=1&addressdetails=1`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Geocoding failed (${res.status})`)
+
+  const data = (await res.json()) as NominatimResult[]
+  if (!data.length) throw new Error(`ZIP ${zip} not found — double-check it and try again.`)
+
+  return {
+    lat: parseFloat(data[0].lat),
+    lon: parseFloat(data[0].lon),
+    state: data[0].address?.state ?? '',
+  }
 }
 
 export async function fetchStationsByZip(zip: string): Promise<RawStation[]> {
-  const res = await fetch(`/api/stations?zip=${encodeURIComponent(zip)}`)
+  const { lat, lon, state } = await geocodeZip(zip)
 
-  if (!res.ok) {
-    throw new Error(`Radio-Locator returned ${res.status}. Check your ZIP code or try again.`)
-  }
+  if (!state) throw new Error(`Could not resolve a US state for ZIP ${zip}.`)
 
-  const contentType = res.headers.get('content-type') ?? ''
+  const params = new URLSearchParams({
+    countrycodeexact: 'US',
+    state,
+    hidebroken: 'true',
+    order: 'votes',
+    limit: '150',
+  })
 
-  if (contentType.includes('json')) {
-    const data = (await res.json()) as RawJsonStation[]
-    return parseJsonStations(Array.isArray(data) ? data : [])
-  }
+  const res = await fetch(`${RADIO_BROWSER}/json/stations/search?${params}`)
+  if (!res.ok) throw new Error(`Station lookup failed (${res.status}). Try again in a moment.`)
 
-  // Fallback: try to parse as text/table
-  const text = await res.text()
+  const raw = (await res.json()) as RadioBrowserStation[]
 
-  // If HTML, try to extract table data
-  if (text.trimStart().startsWith('<')) {
-    return parseHtmlTable(text)
-  }
+  return raw
+    .filter((s) => s.lastcheckok === 1 && s.countrycode === 'US' && s.tags.trim())
+    .map((s) => {
+      const { frequency, band } = extractFreqBand(s.name)
+      const distance =
+        s.geo_lat != null && s.geo_long != null
+          ? haversine(lat, lon, s.geo_lat, s.geo_long)
+          : 999
 
-  return parseTextStations(text)
-}
-
-function parseHtmlTable(html: string): RawStation[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(html, 'text/html')
-  const rows = Array.from(doc.querySelectorAll('table tr')).slice(1) // skip header
-
-  return rows
-    .map((row) => {
-      const cells = Array.from(row.querySelectorAll('td')).map((td) => td.textContent?.trim() ?? '')
       return {
-        callSign: cells[0] ?? '',
-        frequency: cells[1] ?? '',
-        band: cells[2] ?? 'FM',
-        format: cells[3] ?? 'Unknown',
-        city: cells[4] ?? '',
-        state: cells[5] ?? '',
-        distance: parseFloat(cells[6] ?? '0') || 0,
-        slogan: cells[7],
+        callSign: extractCallSign(s.name),
+        frequency,
+        band,
+        format: tagsToFormat(s.tags),
+        city: s.state,
+        state: s.state,
+        distance,
+        slogan: s.name,
       }
     })
-    .filter((s) => s.callSign.length > 1)
 }
