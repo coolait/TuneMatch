@@ -4,40 +4,28 @@ interface Props {
   profile: SpotifyProfile
 }
 
-const GENRE_COLORS = [
-  'bg-purple-500',
-  'bg-blue-500',
-  'bg-spotify',
-  'bg-yellow-500',
-  'bg-red-500',
-  'bg-pink-500',
-  'bg-indigo-400',
-  'bg-teal-500',
+const COLORS = [
+  { bar: 'bg-purple-500', dot: 'bg-purple-500' },
+  { bar: 'bg-blue-500',   dot: 'bg-blue-500' },
+  { bar: 'bg-green-500',  dot: 'bg-green-500' },
+  { bar: 'bg-yellow-500', dot: 'bg-yellow-500' },
+  { bar: 'bg-red-500',    dot: 'bg-red-500' },
+  { bar: 'bg-pink-500',   dot: 'bg-pink-500' },
+  { bar: 'bg-indigo-400', dot: 'bg-indigo-400' },
+  { bar: 'bg-teal-500',   dot: 'bg-teal-500' },
 ]
 
-const LEGEND_COLORS = [
-  'bg-purple-500',
-  'bg-blue-500',
-  'bg-green-500',
-  'bg-yellow-500',
-  'bg-red-500',
-  'bg-pink-500',
-  'bg-indigo-400',
-  'bg-teal-500',
-]
-
-function AudioBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100)
+function AudioBar({ label, value, display }: { label: string; value: number; display: string }) {
   return (
     <div>
       <div className="flex justify-between text-xs text-gray-600 mb-1">
         <span className="font-medium">{label}</span>
-        <span className="tabular-nums">{pct}%</span>
+        <span className="tabular-nums">{display}</span>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
         <div
           className="h-full bg-spotify rounded-full transition-all duration-500"
-          style={{ width: `${pct}%` }}
+          style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }}
         />
       </div>
     </div>
@@ -50,6 +38,7 @@ export default function TasteProfile({ profile }: Props) {
     .slice(0, 8)
 
   const total = topGenres.reduce((sum, [, c]) => sum + c, 0)
+  const hasGenres = topGenres.length > 0 && total > 0
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
@@ -57,50 +46,60 @@ export default function TasteProfile({ profile }: Props) {
         Your Taste Profile
       </h3>
 
-      {/* Genre stacked bar */}
-      <div>
-        <div className="flex h-5 rounded-full overflow-hidden gap-px">
-          {topGenres.map(([genre, count], i) => (
-            <div
-              key={genre}
-              className={`${GENRE_COLORS[i]} transition-all duration-500`}
-              style={{ width: `${(count / total) * 100}%` }}
-              title={`${genre}: ${Math.round((count / total) * 100)}%`}
-            />
-          ))}
-        </div>
+      {hasGenres ? (
+        <div>
+          {/* Stacked genre bar */}
+          <div className="flex h-5 rounded-full overflow-hidden gap-px">
+            {topGenres.map(([genre, count], i) => (
+              <div
+                key={genre}
+                className={`${COLORS[i].bar} transition-all duration-500`}
+                style={{ width: `${(count / total) * 100}%` }}
+                title={`${genre}: ${Math.round((count / total) * 100)}%`}
+              />
+            ))}
+          </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5">
-          {topGenres.map(([genre], i) => (
-            <div key={genre} className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${LEGEND_COLORS[i]}`} />
-              <span className="text-xs text-gray-600 capitalize">{genre}</span>
-            </div>
-          ))}
+          {/* Legend */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5">
+            {topGenres.map(([genre], i) => (
+              <div key={genre} className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${COLORS[i].dot}`} />
+                <span className="text-xs text-gray-600 capitalize">{genre}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="text-sm text-gray-400">
+          No genre data found. Play more music on Spotify and try again.
+        </p>
+      )}
 
       {/* Audio feature bars */}
       <div className="space-y-2 pt-2 border-t border-gray-50">
-        <AudioBar label="Energy" value={profile.avgEnergy} />
-        <AudioBar label="Mood" value={profile.avgValence} />
-        <AudioBar label="Danceability" value={profile.avgDanceability} />
-        <div>
-          <div className="flex justify-between text-xs text-gray-600 mb-1">
-            <span className="font-medium">Tempo</span>
-            <span className="tabular-nums">{Math.round(profile.avgTempo)} BPM</span>
-          </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-spotify rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, (profile.avgTempo / 200) * 100)}%` }}
-            />
-          </div>
-        </div>
+        <AudioBar
+          label="Energy"
+          value={profile.avgEnergy}
+          display={`${Math.round(profile.avgEnergy * 100)}%`}
+        />
+        <AudioBar
+          label="Mood"
+          value={profile.avgValence}
+          display={`${Math.round(profile.avgValence * 100)}%`}
+        />
+        <AudioBar
+          label="Danceability"
+          value={profile.avgDanceability}
+          display={`${Math.round(profile.avgDanceability * 100)}%`}
+        />
+        <AudioBar
+          label="Tempo"
+          value={profile.avgTempo / 200}
+          display={`${Math.round(profile.avgTempo)} BPM`}
+        />
       </div>
 
-      {/* Top artists */}
       {profile.topArtists.length > 0 && (
         <div className="pt-2 border-t border-gray-50">
           <p className="text-xs text-gray-400 font-medium mb-1.5">Top Artists</p>

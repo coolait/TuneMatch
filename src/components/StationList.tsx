@@ -15,10 +15,13 @@ interface Props {
 export default function StationList({ stations, profile, loading, vibesLoading, zip }: Props) {
   const [sortMode, setSortMode] = useState<'score' | 'signal'>('score')
 
+  // Vibes are only fetched for the top 5 by score — track those call signs regardless of display order
+  const top5ByScore = new Set(
+    [...stations].sort((a, b) => b.finalScore - a.finalScore).slice(0, 5).map((s) => s.callSign)
+  )
+
   const sorted = [...stations].sort((a, b) =>
-    sortMode === 'score'
-      ? b.finalScore - a.finalScore
-      : a.distance - b.distance
+    sortMode === 'score' ? b.finalScore - a.finalScore : a.distance - b.distance
   )
 
   const topStation = sorted[0]
@@ -32,13 +35,13 @@ export default function StationList({ stations, profile, loading, vibesLoading, 
     )
   }
 
-  if (!loading && stations.length === 0 && zip) {
+  if (stations.length === 0 && zip) {
     return (
       <div className="text-center py-12 px-4">
         <div className="text-4xl mb-3">📻</div>
         <p className="text-gray-700 font-medium">No stations found near {zip}</p>
         <p className="text-gray-500 text-sm mt-1">
-          Try a nearby major city's ZIP code — e.g. 10001 (NYC), 90001 (LA), 60601 (Chicago)
+          Try a nearby major city's ZIP — e.g. 10001 (NYC), 90001 (LA), 60601 (Chicago)
         </p>
       </div>
     )
@@ -48,20 +51,17 @@ export default function StationList({ stations, profile, loading, vibesLoading, 
 
   return (
     <div className="space-y-4">
-      {/* Header row */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
           {stations.length} station{stations.length !== 1 ? 's' : ''} matched
         </p>
 
-        {/* Sort toggle */}
         <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
           <button
             onClick={() => setSortMode('score')}
             className={`px-3 py-1.5 rounded-md transition-colors ${
-              sortMode === 'score'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'text-gray-500 hover:text-gray-700'
+              sortMode === 'score' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             By match
@@ -69,9 +69,7 @@ export default function StationList({ stations, profile, loading, vibesLoading, 
           <button
             onClick={() => setSortMode('signal')}
             className={`px-3 py-1.5 rounded-md transition-colors ${
-              sortMode === 'signal'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'text-gray-500 hover:text-gray-700'
+              sortMode === 'signal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             By signal
@@ -79,7 +77,7 @@ export default function StationList({ stations, profile, loading, vibesLoading, 
         </div>
       </div>
 
-      {/* Genre match legend */}
+      {/* Genre match pills */}
       {drivingGenres.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-gray-400 font-medium">How we matched you:</span>
@@ -102,6 +100,7 @@ export default function StationList({ stations, profile, loading, vibesLoading, 
             station={station}
             rank={sortMode === 'score' ? idx + 1 : 999}
             vibesLoading={vibesLoading}
+            couldHaveVibe={top5ByScore.has(station.callSign)}
           />
         ))}
       </div>

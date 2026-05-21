@@ -23,6 +23,53 @@ interface SpotifyAudioFeature {
   tempo: number
 }
 
+// Genre-based audio feature estimation for when Spotify restricts /audio-features (403)
+const GENRE_AUDIO_PROFILES: Array<{ keywords: string[]; energy: number; valence: number; danceability: number; tempo: number }> = [
+  { keywords: ['hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'urban'], energy: 0.72, valence: 0.50, danceability: 0.78, tempo: 120 },
+  { keywords: ['pop', 'dance pop', 'electropop', 'synth pop', 'teen pop'], energy: 0.66, valence: 0.66, danceability: 0.73, tempo: 118 },
+  { keywords: ['r&b', 'rnb', 'soul', 'neo soul', 'funk'], energy: 0.62, valence: 0.55, danceability: 0.72, tempo: 105 },
+  { keywords: ['rock', 'hard rock', 'arena rock', 'pop rock'], energy: 0.78, valence: 0.44, danceability: 0.52, tempo: 130 },
+  { keywords: ['alternative', 'indie rock', 'grunge', 'post-punk', 'shoegaze'], energy: 0.68, valence: 0.40, danceability: 0.50, tempo: 126 },
+  { keywords: ['metal', 'heavy metal', 'thrash', 'death metal'], energy: 0.92, valence: 0.32, danceability: 0.40, tempo: 148 },
+  { keywords: ['country', 'country pop', 'americana', 'bluegrass'], energy: 0.60, valence: 0.62, danceability: 0.60, tempo: 118 },
+  { keywords: ['jazz', 'bebop', 'swing', 'big band', 'smooth jazz'], energy: 0.42, valence: 0.55, danceability: 0.48, tempo: 112 },
+  { keywords: ['blues'], energy: 0.52, valence: 0.43, danceability: 0.52, tempo: 108 },
+  { keywords: ['classical', 'orchestra', 'symphony', 'opera'], energy: 0.28, valence: 0.50, danceability: 0.22, tempo: 90 },
+  { keywords: ['edm', 'house', 'techno', 'trance', 'dubstep', 'drum and bass'], energy: 0.88, valence: 0.58, danceability: 0.84, tempo: 128 },
+  { keywords: ['folk', 'singer-songwriter', 'acoustic', 'indie folk'], energy: 0.40, valence: 0.54, danceability: 0.42, tempo: 106 },
+  { keywords: ['latin', 'reggaeton', 'salsa', 'cumbia', 'bachata'], energy: 0.74, valence: 0.70, danceability: 0.80, tempo: 120 },
+  { keywords: ['reggae', 'dancehall', 'ska'], energy: 0.60, valence: 0.65, danceability: 0.72, tempo: 100 },
+  { keywords: ['gospel', 'christian', 'worship'], energy: 0.62, valence: 0.70, danceability: 0.55, tempo: 110 },
+]
+
+function estimateAudioFeaturesFromGenres(genreCounts: Record<string, number>): Pick<SpotifyProfile, 'avgEnergy' | 'avgValence' | 'avgDanceability' | 'avgTempo'> {
+  let totalWeight = 0
+  let energy = 0, valence = 0, danceability = 0, tempo = 0
+
+  for (const [genre, count] of Object.entries(genreCounts)) {
+    const g = genre.toLowerCase()
+    const profile = GENRE_AUDIO_PROFILES.find((p) => p.keywords.some((kw) => g.includes(kw)))
+    if (profile) {
+      energy += profile.energy * count
+      valence += profile.valence * count
+      danceability += profile.danceability * count
+      tempo += profile.tempo * count
+      totalWeight += count
+    }
+  }
+
+  if (totalWeight === 0) {
+    return { avgEnergy: 0.55, avgValence: 0.52, avgDanceability: 0.58, avgTempo: 115 }
+  }
+
+  return {
+    avgEnergy: energy / totalWeight,
+    avgValence: valence / totalWeight,
+    avgDanceability: danceability / totalWeight,
+    avgTempo: tempo / totalWeight,
+  }
+}
+
 function generateRandomString(length: number): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const values = crypto.getRandomValues(new Uint8Array(length))
@@ -75,10 +122,10 @@ export async function handleCallback(code: string): Promise<void> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error_description ?? `Token exchange failed (${res.status})`)
+    throw new Error((err as { error_description?: string }).error_description ?? `Token exchange failed (${res.status})`)
   }
 
-  const data = await res.json()
+  const data = await res.json() as { access_token: string; expires_in: number }
   localStorage.setItem('spotify_token', data.access_token)
   localStorage.setItem('spotify_expiry', String(Date.now() + data.expires_in * 1000))
   localStorage.removeItem('pkce_verifier')
@@ -117,10 +164,10 @@ export async function getSpotifyProfile(): Promise<SpotifyProfile> {
   const artists = artistsData.items ?? []
   const tracks = tracksData.items ?? []
 
-  // Aggregate genres weighted by artist rank
+  // Aggregate genres weighted by artist rank (higher rank = more weight)
   const genreCounts: Record<string, number> = {}
   artists.forEach((artist, idx) => {
-    const weight = artists.length - idx // higher rank = more weight
+    const weight = artists.length - idx
     ;(artist.genres ?? []).forEach((genre) => {
       genreCounts[genre] = (genreCounts[genre] ?? 0) + weight
     })
@@ -133,28 +180,37 @@ export async function getSpotifyProfile(): Promise<SpotifyProfile> {
 
   const topArtists = artists.slice(0, 10).map((a) => a.name)
 
-  // Fetch audio features in chunks of 100
-  const ids = tracks.map((t) => t.id).join(',')
+  // Try real audio features; Spotify restricts this endpoint for newer apps (403)
   let features: SpotifyAudioFeature[] = []
+  const ids = tracks.map((t) => t.id).join(',')
   if (ids) {
-    const featData = await spotifyGet<{ audio_features: (SpotifyAudioFeature | null)[] }>(
-      `/audio-features?ids=${ids}`
-    )
-    features = (featData.audio_features ?? []).filter(Boolean) as SpotifyAudioFeature[]
+    try {
+      const featData = await spotifyGet<{ audio_features: (SpotifyAudioFeature | null)[] }>(
+        `/audio-features?ids=${ids}`
+      )
+      features = (featData.audio_features ?? []).filter(Boolean) as SpotifyAudioFeature[]
+    } catch {
+      // Falls through to genre-based estimation below
+    }
   }
 
-  const avg = (key: keyof SpotifyAudioFeature): number => {
-    const vals = features.map((f) => f[key] as number)
-    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0.5
+  if (features.length > 0) {
+    const avg = (key: keyof SpotifyAudioFeature): number => {
+      const vals = features.map((f) => f[key] as number)
+      return vals.reduce((a, b) => a + b, 0) / vals.length
+    }
+    return {
+      topGenres,
+      genreCounts,
+      topArtists,
+      avgEnergy: avg('energy'),
+      avgValence: avg('valence'),
+      avgDanceability: avg('danceability'),
+      avgTempo: avg('tempo'),
+    }
   }
 
-  return {
-    topGenres,
-    genreCounts,
-    topArtists,
-    avgEnergy: avg('energy'),
-    avgValence: avg('valence'),
-    avgDanceability: avg('danceability'),
-    avgTempo: avg('tempo'),
-  }
+  // Fallback: estimate audio features from genre profile
+  const estimated = estimateAudioFeaturesFromGenres(genreCounts)
+  return { topGenres, genreCounts, topArtists, ...estimated }
 }

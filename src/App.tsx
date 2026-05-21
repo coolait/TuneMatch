@@ -16,6 +16,16 @@ import TasteProfile from './components/TasteProfile'
 
 type AuthState = 'loading' | 'authenticated' | 'unauthenticated'
 
+const EMPTY_PROFILE: SpotifyProfile = {
+  topGenres: [],
+  genreCounts: {},
+  topArtists: [],
+  avgEnergy: 0.5,
+  avgValence: 0.5,
+  avgDanceability: 0.5,
+  avgTempo: 120,
+}
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
   const [profile, setProfile] = useState<SpotifyProfile | null>(null)
@@ -55,7 +65,7 @@ export default function App() {
 
     if (isAuthenticated()) {
       setAuthState('authenticated')
-      loadProfile()
+      void loadProfile()
     } else {
       setAuthState('unauthenticated')
     }
@@ -84,27 +94,33 @@ export default function App() {
     setSearchError(null)
     setVibesLoading(false)
 
+    // Stage 1: fetch and score stations
+    let scored: ScoredStation[] = []
     try {
       const raw = await fetchStationsByZip(zip)
-      const scored = scoreStations(raw, profile)
+      scored = scoreStations(raw, profile)
       setStations(scored)
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Something went wrong fetching stations')
       setStationsLoading(false)
+      return
+    }
+    setStationsLoading(false)
 
-      if (scored.length === 0) return
+    if (scored.length === 0) return
 
-      setVibesLoading(true)
-      const top5 = scored.slice(0, 5)
-      const vibes = await generateVibeDescriptions(profile, top5)
-
+    // Stage 2: vibe descriptions — optional, never block or break the results
+    setVibesLoading(true)
+    try {
+      const vibes = await generateVibeDescriptions(profile, scored.slice(0, 5))
       setStations((prev) =>
         prev.map((s) => ({
           ...s,
           vibeText: vibes[s.callSign] ?? vibes[s.callSign.toUpperCase()] ?? s.vibeText,
         }))
       )
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : 'Something went wrong')
-      setStationsLoading(false)
+    } catch {
+      // Vibe descriptions are decorative — silently skip on failure
     } finally {
       setVibesLoading(false)
     }
@@ -123,11 +139,9 @@ export default function App() {
       {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-black tracking-tight text-gray-900">
-              Tune<span className="text-spotify">Match</span>
-            </span>
-          </div>
+          <span className="text-xl font-black tracking-tight text-gray-900">
+            Tune<span className="text-spotify">Match</span>
+          </span>
 
           {authState === 'authenticated' && (
             <button
@@ -141,14 +155,12 @@ export default function App() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-        {/* Loading state */}
         {authState === 'loading' && (
           <div className="flex justify-center py-16">
             <div className="w-8 h-8 border-4 border-spotify border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {/* Unauthenticated */}
         {authState === 'unauthenticated' && (
           <div className="text-center py-16 space-y-6">
             <div>
@@ -170,62 +182,52 @@ export default function App() {
               Connect with Spotify
             </button>
 
-            {profileError && (
-              <p className="text-red-500 text-sm">{profileError}</p>
-            )}
+            {profileError && <p className="text-red-500 text-sm">{profileError}</p>}
           </div>
         )}
 
-        {/* Authenticated */}
         {authState === 'authenticated' && (
           <>
-            {/* Taste profile */}
+            {/* Taste profile skeleton while loading */}
             {profile ? (
               <TasteProfile profile={profile} />
-            ) : (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="space-y-2 animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-32" />
-                  <div className="h-5 bg-gray-200 rounded w-full" />
-                  <div className="h-3 bg-gray-200 rounded w-3/4" />
-                </div>
+            ) : !profileError ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3 animate-pulse">
+                <div className="h-3 bg-gray-200 rounded w-28" />
+                <div className="h-5 bg-gray-200 rounded w-full" />
+                <div className="h-3 bg-gray-200 rounded w-3/4" />
               </div>
-            )}
+            ) : null}
 
             {profileError && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-start gap-2">
                 <span>⚠️</span>
                 <div>
                   <p>{profileError}</p>
-                  {profileError.includes('expired') && (
-                    <button
-                      onClick={() => void initiateLogin()}
-                      className="mt-2 text-red-600 underline font-medium text-xs"
-                    >
-                      Re-authenticate with Spotify
-                    </button>
-                  )}
+                  <button
+                    onClick={() => void initiateLogin()}
+                    className="mt-2 text-red-600 underline font-medium text-xs"
+                  >
+                    Re-connect with Spotify
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* ZIP search */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <ZipInput onSearch={handleSearch} loading={stationsLoading} />
             </div>
 
-            {/* Search errors */}
             {searchError && !stationsLoading && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
                 ⚠️ {searchError}
               </div>
             )}
 
-            {/* Results */}
             {(stationsLoading || stations.length > 0 || (!stationsLoading && lastZip)) && (
               <StationList
                 stations={stations}
-                profile={profile ?? { topGenres: [], genreCounts: {}, topArtists: [], avgEnergy: 0.5, avgValence: 0.5, avgDanceability: 0.5, avgTempo: 120 }}
+                profile={profile ?? EMPTY_PROFILE}
                 loading={stationsLoading}
                 vibesLoading={vibesLoading}
                 zip={lastZip}
