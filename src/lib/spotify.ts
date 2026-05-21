@@ -121,7 +121,7 @@ export async function getSpotifyProfile(): Promise<SpotifyProfile> {
   const genreCounts: Record<string, number> = {}
   artists.forEach((artist, idx) => {
     const weight = artists.length - idx // higher rank = more weight
-    artist.genres.forEach((genre) => {
+    ;(artist.genres ?? []).forEach((genre) => {
       genreCounts[genre] = (genreCounts[genre] ?? 0) + weight
     })
   })
