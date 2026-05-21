@@ -227,7 +227,6 @@ export function scoreStations(stations: RawStation[], profile: SpotifyProfile): 
       const finalScore = Math.round(formatScore * 0.65 + audioScore * 0.35)
       return { ...station, formatScore, audioScore, finalScore }
     })
-    .filter((s) => s.finalScore > 5)
     .sort((a, b) => b.finalScore - a.finalScore)
 }
 

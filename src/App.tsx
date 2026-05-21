@@ -16,6 +16,12 @@ import TasteProfile from './components/TasteProfile'
 
 type AuthState = 'loading' | 'authenticated' | 'unauthenticated'
 
+interface DebugInfo {
+  profile: SpotifyProfile
+  rawCount: number
+  allScored: ScoredStation[]
+}
+
 const EMPTY_PROFILE: SpotifyProfile = {
   topGenres: [],
   genreCounts: {},
@@ -46,6 +52,9 @@ export default function App() {
   const [vibesLoading, setVibesLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [lastZip, setLastZip] = useState('')
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
+  const [debugOpen, setDebugOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -104,12 +113,19 @@ export default function App() {
     setStations([])
     setSearchError(null)
     setVibesLoading(false)
+    setDebugInfo(null)
 
     // Stage 1: fetch and score stations
     let scored: ScoredStation[] = []
     try {
       const raw = await fetchStationsByZip(zip)
-      scored = scoreStations(raw, profile)
+
+      // scoreStations returns all scored + sorted, no filter — we apply it here
+      const allScored = scoreStations(raw, profile)
+      setDebugInfo({ profile, rawCount: raw.length, allScored })
+
+      // Only show stations with a non-zero match score
+      scored = allScored.filter((s) => s.finalScore > 0)
       setStations(scored)
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : 'Something went wrong fetching stations')
@@ -149,7 +165,31 @@ export default function App() {
     setProfile(null)
     setStations([])
     setSearchError(null)
+    setDebugInfo(null)
     setAuthState('unauthenticated')
+  }
+
+  function copyDebug() {
+    if (!debugInfo) return
+    const text = JSON.stringify(
+      {
+        profile: debugInfo.profile,
+        rawStationCount: debugInfo.rawCount,
+        top20Stations: debugInfo.allScored.slice(0, 20).map((s) => ({
+          name: s.slogan ?? s.callSign,
+          tags: s.format,
+          formatScore: s.formatScore,
+          audioScore: s.audioScore,
+          finalScore: s.finalScore,
+        })),
+      },
+      null,
+      2
+    )
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   return (
@@ -220,7 +260,6 @@ export default function App() {
 
         {authState === 'authenticated' && (
           <>
-            {/* Taste profile skeleton while loading */}
             {profile ? (
               <TasteProfile profile={profile} />
             ) : !profileError ? (
@@ -264,6 +303,89 @@ export default function App() {
                 vibesLoading={vibesLoading}
                 zip={lastZip}
               />
+            )}
+
+            {/* Debug panel — visible after any search */}
+            {debugInfo && !stationsLoading && (
+              <div className="border border-gray-200 rounded-2xl overflow-hidden text-xs">
+                <button
+                  onClick={() => setDebugOpen((o) => !o)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-gray-500 font-medium"
+                >
+                  <span>
+                    Debug info — {debugInfo.rawCount} raw stations from Radio Browser,{' '}
+                    {debugInfo.allScored.filter((s) => s.finalScore > 0).length} matched
+                  </span>
+                  <span>{debugOpen ? '▲' : '▼'}</span>
+                </button>
+
+                {debugOpen && (
+                  <div className="p-4 space-y-4 bg-white">
+                    {/* Top 20 stations with scores */}
+                    <div>
+                      <p className="font-semibold text-gray-700 mb-2">Top 20 stations (before filter)</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="text-gray-400">
+                              <th className="pr-3 pb-1 font-medium">Station</th>
+                              <th className="pr-3 pb-1 font-medium">Tags</th>
+                              <th className="pr-2 pb-1 font-medium text-right">Fmt</th>
+                              <th className="pr-2 pb-1 font-medium text-right">Aud</th>
+                              <th className="pb-1 font-medium text-right">Final</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {debugInfo.allScored.slice(0, 20).map((s, i) => (
+                              <tr key={i} className="border-t border-gray-50">
+                                <td className="pr-3 py-1 text-gray-700 font-medium truncate max-w-[120px]">
+                                  {s.slogan ?? s.callSign}
+                                </td>
+                                <td className="pr-3 py-1 text-gray-400 truncate max-w-[160px]">{s.format}</td>
+                                <td className="pr-2 py-1 text-right text-gray-600">{s.formatScore}</td>
+                                <td className="pr-2 py-1 text-right text-gray-600">{s.audioScore}</td>
+                                <td className={`py-1 text-right font-bold ${s.finalScore > 0 ? 'text-green-600' : 'text-red-400'}`}>
+                                  {s.finalScore}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Copyable JSON dump */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-semibold text-gray-700">Full JSON dump (copy and send to Claude)</p>
+                        <button
+                          onClick={copyDebug}
+                          className="px-3 py-1 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                        >
+                          {copied ? '✓ Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <pre className="bg-gray-50 rounded-xl p-3 overflow-auto max-h-64 text-gray-600 leading-relaxed">
+                        {JSON.stringify(
+                          {
+                            profile: debugInfo.profile,
+                            rawStationCount: debugInfo.rawCount,
+                            top20Stations: debugInfo.allScored.slice(0, 20).map((s) => ({
+                              name: s.slogan ?? s.callSign,
+                              tags: s.format,
+                              formatScore: s.formatScore,
+                              audioScore: s.audioScore,
+                              finalScore: s.finalScore,
+                            })),
+                          },
+                          null,
+                          2
+                        )}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </>
         )}
