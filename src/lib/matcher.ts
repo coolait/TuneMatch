@@ -205,9 +205,13 @@ function calculateAudioScore(
     }
   }
 
-  // Mid-range energy, mid-tempo → Classic Rock, Country, AC
-  if (avgEnergy >= 0.4 && avgEnergy <= 0.7 && avgTempo >= 90 && avgTempo <= 130) {
-    if (hits('classic rock', 'country', 'adult contemporary', 'americana', 'adult album alternative')) {
+  // Mid-range energy, mid-tempo → Rock, Pop, Country, AC, era stations
+  if (avgEnergy >= 0.4 && avgEnergy <= 0.75 && avgTempo >= 85 && avgTempo <= 135) {
+    if (hits(
+      'classic rock', 'country', 'adult contemporary', 'americana', 'adult album alternative',
+      'rock', 'pop', 'alternative', 'classic hits', '70s', '80s', '90s', '00s',
+      'indie', 'hits', 'adult hits',
+    )) {
       score += 15
     }
   }
@@ -223,7 +227,7 @@ export function scoreStations(stations: RawStation[], profile: SpotifyProfile): 
       const finalScore = Math.round(formatScore * 0.65 + audioScore * 0.35)
       return { ...station, formatScore, audioScore, finalScore }
     })
-    .filter((s) => s.finalScore > 15)
+    .filter((s) => s.finalScore > 0)
     .sort((a, b) => b.finalScore - a.finalScore)
 }
 

@@ -81,6 +81,7 @@ export async function fetchStationsByZip(zip: string): Promise<RawStation[]> {
     state,
     hidebroken: 'true',
     order: 'votes',
+    reverse: 'true',
     limit: '150',
   })
 
@@ -90,7 +91,7 @@ export async function fetchStationsByZip(zip: string): Promise<RawStation[]> {
   const raw = (await res.json()) as RadioBrowserStation[]
 
   return raw
-    .filter((s) => s.lastcheckok === 1 && s.countrycode === 'US' && s.tags.trim())
+    .filter((s) => s.lastcheckok === 1 && s.countrycode === 'US')
     .map((s) => {
       const { frequency, band } = extractFreqBand(s.name)
       const distance =
