@@ -167,61 +167,52 @@ function calculateAudioScore(
 ): number {
   const f = stationFormat.toLowerCase()
   const { avgEnergy, avgValence, avgDanceability, avgTempo } = profile
-
   const hits = (...formats: string[]) => formats.some((fmt) => f.includes(fmt))
 
   let score = 0
 
-  // High energy + danceability → Top-40, Hip-Hop, Dance, Pop
-  if (avgEnergy >= 0.65 && avgDanceability >= 0.6) {
-    if (hits('top-40', 'top 40', 'top40', 'chr', 'hip-hop', 'hip hop', 'dance', 'urban', 'rhythmic', 'pop', 'hits')) {
-      score += 35
+  // Upbeat + danceable profile → confirms Top-40 / Pop / Hip-Hop / Urban / Dance stations
+  // (Only those station types benefit — rock/country stations don't fire this check)
+  if (avgDanceability >= 0.65 && avgEnergy >= 0.60) {
+    if (hits('top-40', 'top 40', 'top40', 'chr', 'hip-hop', 'hip hop', 'urban', 'rhythmic', 'dance', 'pop', 'hits', 'hot ac')) {
+      score += 45
     }
   }
 
-  // Moderate-high energy → Rock, Pop, Alternative, Classic Hits
-  if (avgEnergy > 0.5) {
-    if (hits('rock', 'pop', 'alternative', 'active rock', 'classic rock', 'top-40', 'top 40', 'top40', 'hits', 'classic hits', '80s', '90s', '00s')) {
-      score += 20
-    }
-  }
-
-  // Positive mood → AC, Hot AC, Pop, Hits
-  if (avgValence > 0.55) {
-    if (hits('adult contemporary', 'hot ac', 'top-40', 'top 40', 'top40', 'soft ac', 'lite', 'pop', 'hits', 'adult hits')) {
-      score += 20
-    }
-  }
-
-  // Low energy → Folk, Classical, Jazz, Chill
-  if (avgEnergy < 0.45) {
-    if (hits('folk', 'classical', 'jazz', 'smooth jazz', 'americana', 'adult standards', 'new age', 'soft ac', 'lite')) {
-      score += 35
-    }
-  }
-
-  // Fast tempo → Dance, Hip-Hop, CHR
-  if (avgTempo > 125) {
-    if (hits('dance', 'hip-hop', 'hip hop', 'chr', 'top-40', 'top 40', 'top40', 'rhythmic')) {
-      score += 20
-    }
-  }
-
-  // Dark / moody → Alternative, Rock, Metal
-  if (avgValence < 0.4) {
-    if (hits('alternative', 'rock', 'classic rock', 'active rock', 'grunge', 'metal', 'punk', '90s')) {
+  // Positive / happy mood + somewhat danceable → Pop, AC, Country, Hits formats
+  if (avgValence >= 0.60 && avgDanceability >= 0.55) {
+    if (hits('top-40', 'top 40', 'top40', 'pop', 'hits', 'adult contemporary', 'hot ac', 'country', 'lite', 'soft ac', 'adult hits')) {
       score += 30
     }
   }
 
-  // Mid-range profile → common radio formats
-  if (avgEnergy >= 0.4 && avgEnergy <= 0.75 && avgTempo >= 85 && avgTempo <= 135) {
-    if (hits(
-      'classic rock', 'country', 'adult contemporary', 'americana', 'adult album alternative',
-      'rock', 'pop', 'alternative', 'classic hits', '70s', '80s', '90s', '00s',
-      'indie', 'hits', 'adult hits',
-    )) {
-      score += 20
+  // Chill / low-energy profile → confirms Jazz, Classical, Folk, Smooth, AC
+  if (avgEnergy <= 0.45) {
+    if (hits('jazz', 'smooth jazz', 'classical', 'folk', 'americana', 'soft ac', 'new age', 'adult standards', 'lite', 'quiet storm')) {
+      score += 45
+    }
+  }
+
+  // High energy + LOW danceability = rock profile → confirms Rock / Alternative stations
+  // Key gate: danceability <= 0.58 prevents hip-hop/pop listeners from triggering this
+  if (avgEnergy >= 0.62 && avgDanceability <= 0.58) {
+    if (hits('rock', 'alternative', 'active rock', 'classic rock', 'classic hits', 'alternative rock', 'hard rock', 'metal', 'grunge', 'punk', '90s')) {
+      score += 40
+    }
+  }
+
+  // Low valence + moderate energy = moody/dark profile → extra confirm for Rock / Alternative
+  if (avgValence <= 0.45 && avgEnergy >= 0.50) {
+    if (hits('rock', 'alternative', 'active rock', 'classic rock', 'alternative rock', 'grunge', 'metal', 'punk', '90s')) {
+      score += 25
+    }
+  }
+
+  // Country / Americana profile: moderate energy + positive + not overly danceable
+  // danceability cap <= 0.70 distinguishes country from pop (pop dancers score higher)
+  if (avgEnergy >= 0.45 && avgEnergy <= 0.72 && avgValence >= 0.55 && avgDanceability >= 0.50 && avgDanceability <= 0.70) {
+    if (hits('country', 'americana', 'bluegrass', 'folk', 'adult contemporary', 'hot country', 'new country', 'classic country', 'traditional country')) {
+      score += 35
     }
   }
 
@@ -236,7 +227,7 @@ export function scoreStations(stations: RawStation[], profile: SpotifyProfile): 
       const finalScore = Math.round(formatScore * 0.65 + audioScore * 0.35)
       return { ...station, formatScore, audioScore, finalScore }
     })
-    .filter((s) => s.finalScore > 0)
+    .filter((s) => s.finalScore > 5)
     .sort((a, b) => b.finalScore - a.finalScore)
 }
 
